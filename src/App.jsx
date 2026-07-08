@@ -1,8 +1,9 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { createSpanishLocalConfig } from './data/spanishIdentityList.js';
 import { anonymizeText, DEFAULT_CONFIG } from './lib/anonymizer.js';
 
 const CONFIG_KEY = 'localguard.config.v1';
+const SETTINGS_OPEN_KEY = 'localguard.settingsOpen.v1';
 
 const COUNTRY_OPTIONS = [
   ['espana', '🇪🇸 España', 'España'],
@@ -24,10 +25,9 @@ export default function App() {
   const [outputText, setOutputText] = useState('');
   const [message, setMessage] = useState('');
   const [config, setConfig] = useState(DEFAULT_CONFIG);
-  const [settingsOpen, setSettingsOpen] = useState(false);
+  const [settingsOpen, setSettingsOpen] = useState(() => localStorage.getItem(SETTINGS_OPEN_KEY) === 'true');
   const [fileName, setFileName] = useState('');
   const [selectedCountry, setSelectedCountry] = useState(COUNTRY_OPTIONS[0][0]);
-  const importRef = useRef(null);
 
   const selectedCountryName = COUNTRY_OPTIONS.find(([value]) => value === selectedCountry)?.[2] || 'España';
   const countryPrompt = `Dame una lista de 1000 nombres y 1000 apellidos frecuentes de ${selectedCountryName}, con acentos y caracteres propios del idioma cuando correspondan, separados por comas, sin explicación, para pegar en una app de anonimización.`;
@@ -108,49 +108,30 @@ export default function App() {
 
   function saveConfig() {
     localStorage.setItem(CONFIG_KEY, JSON.stringify(config));
+    localStorage.setItem(SETTINGS_OPEN_KEY, String(settingsOpen));
     setMessage('Configuración guardada solo en este dispositivo/navegador.');
   }
 
   function clearConfig() {
+    if (!window.confirm('¿Seguro que quieres borrar la configuración guardada?')) return;
     localStorage.removeItem(CONFIG_KEY);
     setConfig(DEFAULT_CONFIG);
     setMessage('Configuración borrada.');
   }
 
-  function restoreDefaults() {
-    setConfig(DEFAULT_CONFIG);
-    setMessage('Valores por defecto restaurados. Pulsa guardar para conservarlos.');
-  }
-
   function loadSpanishConfig() {
-    const spanishConfig = { ...DEFAULT_CONFIG, ...createSpanishLocalConfig() };
-    setConfig(spanishConfig);
-    localStorage.setItem(CONFIG_KEY, JSON.stringify(spanishConfig));
+    setConfig((current) => {
+      const spanishConfig = {
+        ...current,
+        ...createSpanishLocalConfig(),
+        spanishExtraIdentities: current.spanishExtraIdentities,
+        internationalIdentities: current.internationalIdentities,
+        alwaysHideOrganizations: current.alwaysHideOrganizations,
+      };
+      localStorage.setItem(CONFIG_KEY, JSON.stringify(spanishConfig));
+      return spanishConfig;
+    });
     setMessage('Configuración española cargada');
-  }
-
-  function exportConfig() {
-    const blob = new Blob([JSON.stringify(config, null, 2)], { type: 'application/json' });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.href = url;
-    link.download = 'localguard-config.json';
-    link.click();
-    URL.revokeObjectURL(url);
-  }
-
-  async function importConfig(event) {
-    const file = event.target.files?.[0];
-    if (!file) return;
-    try {
-      const imported = JSON.parse(await file.text());
-      setConfig({ ...DEFAULT_CONFIG, ...imported });
-      setMessage('Configuración importada. Pulsa guardar para conservarla.');
-    } catch {
-      setMessage('El archivo de configuración no es un JSON válido.');
-    } finally {
-      event.target.value = '';
-    }
   }
 
   function updateConfigField(key, value) {
@@ -164,6 +145,24 @@ export default function App() {
   async function copyCountryPrompt() {
     await navigator.clipboard.writeText(countryPrompt);
     setMessage(`Prompt para ${selectedCountryName} copiado al portapapeles.`);
+  }
+
+  async function shareCountryPrompt() {
+    if (navigator.share) {
+      await navigator.share({ title: 'LocalGuard', text: countryPrompt });
+      return;
+    }
+
+    await navigator.clipboard.writeText(countryPrompt);
+    setMessage('Prompt copiado. Puedes pegarlo en tu IA.');
+  }
+
+  function toggleSettings() {
+    setSettingsOpen((open) => {
+      const nextOpen = !open;
+      localStorage.setItem(SETTINGS_OPEN_KEY, String(nextOpen));
+      return nextOpen;
+    });
   }
 
   return (
@@ -216,7 +215,7 @@ export default function App() {
       </section>
 
       <section className="settings-panel">
-        <button className="settings-toggle" type="button" onClick={() => setSettingsOpen((open) => !open)}>
+        <button className="settings-toggle" type="button" onClick={toggleSettings}>
           {settingsOpen ? 'Ocultar configuración' : 'Configuración'}
         </button>
 
@@ -227,11 +226,20 @@ export default function App() {
             </div>
 
             <label className="config-field">
-              <span>Identidades extra a ocultar</span>
+              <span>Nombres/apellidos españoles extra</span>
               <textarea
-                value={config.alwaysHideIdentities}
-                onChange={(event) => updateConfigField('alwaysHideIdentities', event.target.value)}
-                placeholder="Una entrada por línea, coma o punto y coma"
+                value={config.spanishExtraIdentities}
+                onChange={(event) => updateConfigField('spanishExtraIdentities', event.target.value)}
+                placeholder="Saura, Gómez, Joaquín Saura"
+              />
+            </label>
+
+            <label className="config-field">
+              <span>Nombres/apellidos de otro país</span>
+              <textarea
+                value={config.internationalIdentities}
+                onChange={(event) => updateConfigField('internationalIdentities', event.target.value)}
+                placeholder="Smith, Johnson, William, Emma"
               />
             </label>
 
@@ -253,8 +261,14 @@ export default function App() {
               </select>
             </label>
 
-            <div className="settings-actions single-column">
+            <div className="settings-actions">
               <button type="button" onClick={copyCountryPrompt}>Copiar prompt</button>
+              <button type="button" onClick={shareCountryPrompt}>Compartir prompt</button>
+            </div>
+
+            <div className="settings-actions">
+              <button type="button" onClick={saveConfig}>Guardar configuración</button>
+              <button type="button" onClick={clearConfig}>Borrar configuración</button>
             </div>
           </div>
         )}

@@ -3,6 +3,8 @@ import { SPANISH_FIRST_NAMES, SPANISH_SURNAMES } from '../data/spanishNames.js';
 export const DEFAULT_CONFIG = {
   profileName: '',
   alwaysHideIdentities: '',
+  spanishExtraIdentities: '',
+  internationalIdentities: '',
   alwaysHideOrganizations: '',
   preserveOrganizations: '',
   preserveClinicalWords: '',
@@ -82,7 +84,11 @@ export function anonymizeText(input, config = DEFAULT_CONFIG) {
   if (!text.trim()) return '';
 
   const normalizedConfig = { ...DEFAULT_CONFIG, ...config };
-  const customIdentities = parseMultilineList(normalizedConfig.alwaysHideIdentities);
+  const customIdentities = [
+    ...parseMultilineList(normalizedConfig.alwaysHideIdentities),
+    ...parseMultilineList(normalizedConfig.spanishExtraIdentities),
+    ...parseMultilineList(normalizedConfig.internationalIdentities),
+  ];
   const customOrganizations = parseMultilineList(normalizedConfig.alwaysHideOrganizations);
   const customLabels = parseMultilineList(normalizedConfig.customIdentityLabels);
   const clinicalWords = [
