@@ -1,15 +1,22 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { createSpanishLocalConfig } from './data/spanishIdentityList.js';
 import { anonymizeText, DEFAULT_CONFIG } from './lib/anonymizer.js';
 
 const CONFIG_KEY = 'localguard.config.v1';
 
-const CONFIG_FIELDS = [
-  ['profileName', 'Nombre de perfil local', 'text'],
-  ['alwaysHideIdentities', 'Identidades a ocultar siempre', 'textarea'],
-  ['alwaysHideOrganizations', 'Organizaciones, centros o empresas a ocultar', 'textarea'],
-  ['preserveOrganizations', 'Organizaciones o cabeceras a conservar', 'textarea'],
-  ['preserveClinicalWords', 'Palabras clínicas a conservar', 'textarea'],
-  ['customIdentityLabels', 'Etiquetas identificativas personalizadas', 'textarea'],
+const COUNTRY_OPTIONS = [
+  ['espana', '🇪🇸 España', 'España'],
+  ['francia', '🇫🇷 Francia', 'Francia'],
+  ['italia', '🇮🇹 Italia', 'Italia'],
+  ['alemania', '🇩🇪 Alemania', 'Alemania'],
+  ['portugal', '🇵🇹 Portugal', 'Portugal'],
+  ['reino-unido', '🇬🇧 Reino Unido', 'Reino Unido'],
+  ['estados-unidos', '🇺🇸 Estados Unidos', 'Estados Unidos'],
+  ['marruecos', '🇲🇦 Marruecos', 'Marruecos'],
+  ['rumania', '🇷🇴 Rumanía', 'Rumanía'],
+  ['colombia', '🇨🇴 Colombia', 'Colombia'],
+  ['argentina', '🇦🇷 Argentina', 'Argentina'],
+  ['mexico', '🇲🇽 México', 'México'],
 ];
 
 export default function App() {
@@ -19,7 +26,11 @@ export default function App() {
   const [config, setConfig] = useState(DEFAULT_CONFIG);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [fileName, setFileName] = useState('');
+  const [selectedCountry, setSelectedCountry] = useState(COUNTRY_OPTIONS[0][0]);
   const importRef = useRef(null);
+
+  const selectedCountryName = COUNTRY_OPTIONS.find(([value]) => value === selectedCountry)?.[2] || 'España';
+  const countryPrompt = `Dame una lista de 1000 nombres y 1000 apellidos frecuentes de ${selectedCountryName}, con acentos y caracteres propios del idioma cuando correspondan, separados por comas, sin explicación, para pegar en una app de anonimización.`;
 
   useEffect(() => {
     const saved = localStorage.getItem(CONFIG_KEY);
@@ -111,6 +122,13 @@ export default function App() {
     setMessage('Valores por defecto restaurados. Pulsa guardar para conservarlos.');
   }
 
+  function loadSpanishConfig() {
+    const spanishConfig = { ...DEFAULT_CONFIG, ...createSpanishLocalConfig() };
+    setConfig(spanishConfig);
+    localStorage.setItem(CONFIG_KEY, JSON.stringify(spanishConfig));
+    setMessage('Configuración española cargada');
+  }
+
   function exportConfig() {
     const blob = new Blob([JSON.stringify(config, null, 2)], { type: 'application/json' });
     const url = URL.createObjectURL(blob);
@@ -136,7 +154,16 @@ export default function App() {
   }
 
   function updateConfigField(key, value) {
-    setConfig((current) => ({ ...current, [key]: value }));
+    setConfig((current) => {
+      const nextConfig = { ...current, [key]: value };
+      localStorage.setItem(CONFIG_KEY, JSON.stringify(nextConfig));
+      return nextConfig;
+    });
+  }
+
+  async function copyCountryPrompt() {
+    await navigator.clipboard.writeText(countryPrompt);
+    setMessage(`Prompt para ${selectedCountryName} copiado al portapapeles.`);
   }
 
   return (
@@ -195,32 +222,39 @@ export default function App() {
 
         {settingsOpen && (
           <div className="settings-content">
-            <p className="help-text">
-              Esta configuración se guarda solo en este dispositivo/navegador. No se envía a servidores.
-            </p>
+            <div className="settings-actions single-column">
+              <button type="button" onClick={loadSpanishConfig}>🇪🇸 Cargar configuración español</button>
+            </div>
 
-            {CONFIG_FIELDS.map(([key, label, type]) => (
-              <label className="config-field" key={key}>
-                <span>{label}</span>
-                {type === 'textarea' ? (
-                  <textarea
-                    value={config[key]}
-                    onChange={(event) => updateConfigField(key, event.target.value)}
-                    placeholder="Una entrada por línea"
-                  />
-                ) : (
-                  <input value={config[key]} onChange={(event) => updateConfigField(key, event.target.value)} />
-                )}
-              </label>
-            ))}
+            <label className="config-field">
+              <span>Identidades extra a ocultar</span>
+              <textarea
+                value={config.alwaysHideIdentities}
+                onChange={(event) => updateConfigField('alwaysHideIdentities', event.target.value)}
+                placeholder="Una entrada por línea, coma o punto y coma"
+              />
+            </label>
 
-            <div className="settings-actions">
-              <button type="button" onClick={saveConfig}>Guardar configuración</button>
-              <button type="button" onClick={clearConfig}>Borrar configuración</button>
-              <button type="button" onClick={restoreDefaults}>Restaurar valores por defecto</button>
-              <button type="button" onClick={exportConfig}>Exportar configuración</button>
-              <button type="button" onClick={() => importRef.current?.click()}>Importar configuración</button>
-              <input ref={importRef} hidden type="file" accept="application/json,.json" onChange={importConfig} />
+            <label className="config-field">
+              <span>Organizaciones, centros o empresas a ocultar</span>
+              <textarea
+                value={config.alwaysHideOrganizations}
+                onChange={(event) => updateConfigField('alwaysHideOrganizations', event.target.value)}
+                placeholder="Una entrada por línea, coma o punto y coma"
+              />
+            </label>
+
+            <label className="config-field">
+              <span>🌍 Crear lista de otro país</span>
+              <select value={selectedCountry} onChange={(event) => setSelectedCountry(event.target.value)}>
+                {COUNTRY_OPTIONS.map(([value, label]) => (
+                  <option key={value} value={value}>{label}</option>
+                ))}
+              </select>
+            </label>
+
+            <div className="settings-actions single-column">
+              <button type="button" onClick={copyCountryPrompt}>Copiar prompt</button>
             </div>
           </div>
         )}
